@@ -1,6 +1,8 @@
 <script setup>
     import axios from 'axios';
     import { onMounted, ref } from 'vue';
+    import { stringifyQuery } from 'vue-router';
+    import router from '../../router';
 
     let form = ref([])
     let all_customer = ref([])
@@ -31,7 +33,6 @@
         }
         listCart.value.push(item_cart)
         // closeModal()
-        console.log(listCart.value)
     }
 
     const removeItem = (i) => {
@@ -41,6 +42,34 @@
     const getAllProducts = async () => {
         let response = await axios.get("/api/products")
         all_products.value = response.data.products
+    }
+
+    const onSave = () => {
+        if (listCart.value.length >= 1) {
+            let sub_total = 0
+            sub_total = subTotal()
+
+            let total = 0
+            total = grandTotal()
+
+            const formData = new FormData()
+            formData.append('invoice_items', JSON.stringify(listCart.value))
+            formData.append('customer_id', customer_id.value)
+            formData.append('date', form.value.date)
+            formData.append('due_date', form.value.due_date)
+            formData.append('number', form.value.number)
+            formData.append('reference', form.value.reference)
+            formData.append('discount', form.value.discount)
+            formData.append('sub_total', sub_total)
+            formData.append('total', total)
+            formData.append('terms_and_conditions', form.value.terms_and_conditions)
+            formData.append('date', form.value.date)
+
+            axios.post("/api/store_invoice", formData)
+
+            listCart.value = []
+            router.push('/')
+        }
     }
 
     const openModal = () => {
@@ -162,7 +191,7 @@
                 <div>
                 </div>
                 <div>
-                    <a class="btn btn-secondary">
+                    <a class="btn btn-secondary" @click="onSave()">
                         Save
                     </a>
                 </div>
