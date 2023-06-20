@@ -4,39 +4,23 @@
 
     const router = useRouter()
 
-    let form = ref([])
+    let form = ref({ id: '' })
     let all_customer = ref([])
     let customer_id = ref([])
-    let item = ref([])
-    let listCart = ref([])
     const showModal = ref(false)
     const hideModal = ref(true)
     let all_products = ref([])
 
-    const indexForm = async () => {
-        let response = await axios.get("/api/create_invoice")
-        form.value = response.data
-    }
+    const props = defineProps({
+        id: {
+            type: String,
+            default: '',
+        }
+    })
 
     const getAllCustomers = async () => {
         let response = await axios.get("/api/customers")
         all_customer.value = response.data.customers
-    }
-
-    const addCart = (item) => {
-        const item_cart = {
-            id: item.id,
-            item_code: item.item_code,
-            description: item.description,
-            unit_price: item.unit_price,
-            quantity: item.quantity,
-        }
-        listCart.value.push(item_cart)
-        // closeModal()
-    }
-
-    const removeItem = (i) => {
-        listCart.value.splice(i, 1)
     }
 
     const getAllProducts = async () => {
@@ -44,8 +28,32 @@
         all_products.value = response.data.products
     }
 
-    const onSave = () => {
-        if (listCart.value.length >= 1) {
+    const addCart = (item) => {
+        const item_cart = {
+            product_id: item.id,
+            item_code: item.item_code,
+            description: item.description,
+            unit_price: item.unit_price,
+            quantity: item.quantity,
+        }
+        form.value.invoice_items.push(item_cart)
+        // closeModal()
+    }
+
+    const getInvoice = async () => {
+        let response = await axios.get(`/api/edit_invoice/${props.id}`)
+        form.value = response.data.invoice
+    }
+
+    const deleteInvoiceItem = (id, i) => {
+        form.value.invoice_items.splice(i, 1)
+        if (id != undefined) {
+            axios.get('/api/delete_invoice_items/' + id)
+        }
+    }
+
+    const onEdit = (id) => {
+        // if (form.value.invoice_items.length >= 1) {
             let sub_total = 0
             sub_total = subTotal()
 
@@ -53,8 +61,8 @@
             total = grandTotal()
 
             const formData = new FormData()
-            formData.append('invoice_items', JSON.stringify(listCart.value))
-            formData.append('customer_id', customer_id.value)
+            formData.append('invoice_items', JSON.stringify(form.value.invoice_items))
+            formData.append('customer_id', form.value.customer_id)
             formData.append('date', form.value.date)
             formData.append('due_date', form.value.due_date)
             formData.append('number', form.value.number)
@@ -65,11 +73,11 @@
             formData.append('terms_and_conditions', form.value.terms_and_conditions)
             formData.append('date', form.value.date)
 
-            axios.post("/api/store_invoice", formData)
+            axios.post(`/api/update_invoice/${form.value.id}`, formData)
 
-            listCart.value = []
+            form.value.invoice_items = []
             router.push('/')
-        }
+        // }
     }
 
     const openModal = () => {
@@ -82,18 +90,22 @@
 
     const subTotal = () => {
         let total = 0
-        listCart.value.map((data) => {
-            total = total + (data.quantity * data.unit_price)
-        })
+        if (form.value.invoice_items) {
+            form.value.invoice_items.map((data) => {
+                total = total + (data.quantity * data.unit_price)
+            })
+        }
         return total
     }
 
     const grandTotal = () => {
-        return subTotal() - form.value.discount
+        if (form.value.invoice_items) {
+            return subTotal() - form.value.discount
+        }
     }
 
     onMounted(async () => {
-        indexForm()
+        getInvoice()
         getAllCustomers()
         getAllProducts()
     })
@@ -104,7 +116,7 @@
         <div class="invoices">
             <div class="card__header">
                 <div>
-                    <h2 class="invoice__title">New Invoice</h2>
+                    <h2 class="invoice__title">Edit Invoice</h2>
                 </div>
                 <div>
                     <router-link to="/" class="btn btn-sm btn-secondary">Back</router-link>
@@ -115,7 +127,7 @@
                 <div class="card__content--header">
                     <div>
                         <p class="my-1">Customer</p>
-                        <select name="" id="" class="input" v-model="customer_id">
+                        <select name="" id="" class="input" v-model="form.customer_id">
                             <option disabled>Select customer...</option>
                             <option v-for="customer in all_customer" :value="customer.id" :key="customer.id">
                                 {{ customer.firstname }} - {{ customer.lastname }}
@@ -124,7 +136,7 @@
                     </div>
                     <div>
                         <p class="my-1">Date</p>
-                        <input id="date" placeholder="dd-mm-yyyy" type="date" class="input" v-model="form.date">
+                        <input id="date" placeholder="dd-mm-yyyy" type="date" class="input" v-model="form.date"> <!---->
                         <p class="my-1">Due Date</p>
                         <input id="due_date" type="date" class="input" v-model="form.due_date">
                     </div>
@@ -137,6 +149,7 @@
                 </div>
                 <br><br>
                 <div class="table">
+
                     <div class="table--heading2">
                         <p>Item Description</p>
                         <p>Unit Price</p>
@@ -144,28 +157,33 @@
                         <p>Total</p>
                         <p></p>
                     </div>
-                    <div class="table--items2" v-for="(item_cart, i) in listCart" :key="item_cart.id">
-                        <p>#{{ item_cart.item_code }} - {{ item_cart.description }}</p>
-                        <p>
-                            <input type="text" class="input" v-model="item_cart.unit_price">
+
+                    <!-- item 1 -->
+                    <div class="table--items2" v-for="(itemcart, i) in form.invoice_items" :key="itemcart.id">
+                        <p v-if="itemcart.product">
+                            #{{ itemcart.product.item_code }} {{ itemcart.product.description }}
+                        </p>
+                        <p v-else>
+                            #{{ itemcart.item_code }} {{ itemcart.description }}
                         </p>
                         <p>
-                            <input type="text" class="input" v-model="item_cart.quantity">
+                            <input type="text" class="input" v-model="itemcart.unit_price">
                         </p>
-                        <p v-if="item_cart.quantity">
-                            Rp {{ (item_cart.quantity * item_cart.unit_price) }}
+                        <p>
+                            <input type="text" class="input" v-model="itemcart.quantity">
                         </p>
-                        <p v-else></p>
-                        <p style="color: red; font-size: 24px;cursor: pointer;" @click="removeItem(i)">
+                        <p>
+                            $ {{ itemcart.unit_price * itemcart.quantity }}
+                        </p>
+                        <p style="color: red; font-size: 24px;cursor: pointer;" @click="deleteInvoiceItem(itemcart.id, i)">
                             &times;
                         </p>
                     </div>
                     <div style="padding: 10px 30px !important;">
-                        <button class="btn btn-sm btn__open--modal" @click="openModal()">
-                            Add New Line
-                        </button>
+                        <button class="btn btn-sm btn__open--modal" @click="openModal()">Add New Line</button>
                     </div>
                 </div>
+
                 <div class="table__footer">
                     <div class="document-footer" >
                         <p>Terms and Conditions</p>
@@ -189,9 +207,10 @@
             </div>
             <div class="card__header" style="margin-top: 40px;">
                 <div>
+
                 </div>
                 <div>
-                    <a class="btn btn-secondary" @click="onSave()">
+                    <a class="btn btn-secondary" @click="onEdit(form.id)">
                         Save
                     </a>
                 </div>
